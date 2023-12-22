@@ -1,0 +1,14 @@
+{
+  "name": "Mbed-SSD1306",
+  "version": "1.0.0",
+  "description": "Oled SSD1306 driver for mbed",
+  "keywords": "mbed, i2c, oled, ssd1306, display",
+  "authors": "EinfachBeez",
+  "repository": {
+    "url": "https://github.com/EinfachBeez/mbed_oled_ssd1306.git",
+    "type": "git"
+  },
+  "license": "Apache-2.0",
+  "frameworks": "mbed",
+  "platforms": "ststm32"
+}
