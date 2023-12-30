@@ -3,6 +3,8 @@
 
 #include <mbed.h>
 
+#include "fonts/font_8x8.h"
+
 #define charc static_cast<char>
 
 // I2C implementation
@@ -73,6 +75,7 @@
 #define WHITE_COLOR 0x01
 #define INVERSE_COLOR 0x02
 
+#define VCOMDETECT 0xDB
 
 struct Cursor {
     uint8_t x;
@@ -88,18 +91,17 @@ private:
 
     uint8_t m_i2cAddress{};
     uint8_t m_vcc{};
-    uint8_t m_resetPin{};
 
-    Cursor m_cursor{};
+    bool m_inverted = false;
 
-    const uint8_t* m_font = nullptr;
+    Cursor m_cursor{0, 0};
+
+    uint8_t* m_font = nullptr;
 
     void sendCommand(uint8_t command) const;
     void sendCommand(uint8_t command1, uint8_t command2) const;
     void sendData(uint8_t data) const;
     void sendData(uint8_t data, uint8_t length) const;
-
-
 
     void runUpdateThread() const;
 
@@ -111,18 +113,25 @@ public:
     void start(uint8_t vccState);
 
     void clear();
-    void invert(bool invert) const;
+    void invert();
+    void fill();
 
     void drawPixel(uint16_t x, uint16_t y, uint16_t color);
 
+    void print(unsigned char text, uint16_t color);
+
+    void setFont(uint8_t* font);
+
+    void setCursor(uint16_t x, uint16_t y) {
+        m_cursor.x = x;
+        m_cursor.y = y;
+    };
+
+    void setContrast(uint8_t value) const;
 
     void setFrequency(const int frequency) const {
         m_i2c.frequency(frequency);
     }
-
-    void setFont(const uint8_t* font) const;
-    void setCursor(Cursor cursor) const;
-    void setContrast(uint8_t value) const;
 
     bool getPixel(uint16_t x, uint16_t y) const;
 

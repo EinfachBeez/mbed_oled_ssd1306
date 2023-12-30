@@ -10,11 +10,15 @@ Datasheet: [Link](https://cdn-shop.adafruit.com/datasheets/SSD1306.pdf)
 
 ## Progress
 
-| Status | Description                            |
-|--------|----------------------------------------|
-|        |                                        |
-|        |                                        |
-|        |                                        |
+| Status | Description              |
+|--------|--------------------------|
+| ✔️     | Display pixels & text    |
+| 🧪     | Change font & size       |
+| 📜     | Scrolling Mode           |
+| 📜     | Display geometric shapes |
+| 📜     | Design Templates         |
+| 📜     | Rotate Display           |
+
 
 ``✔️`` **Finished** <br>
 ``🧪`` **Experimental** <br>

@@ -30,9 +30,10 @@ void OledSSD1306::start(uint8_t vccState) {
 
     //sendCommand(MULTIPLEX_RATIO_COMMAND, 0x3F);
     sendCommand(MULTIPLEX_RATIO_COMMAND);
+    sendCommand(0x3F); // HEIGHT - 1
 
     sendCommand(DISPLAY_OFFSET_COMMAND, 0x00);
-    sendCommand(DISPLAY_START_LINE_COMMAND);
+    sendCommand(DISPLAY_START_LINE_COMMAND | 0x00);
 
     //sendCommand(DISPLAY_CHARGE_PUMP_COMMAND, 0x14);
     sendCommand(DISPLAY_CHARGE_PUMP_COMMAND);
@@ -45,9 +46,12 @@ void OledSSD1306::start(uint8_t vccState) {
 
     // 128x64
     sendCommand(SET_COM_PINS, 0x12);
-    sendCommand(CONTRAST_COMMAND, (vccState == INTERNAL_VCC) ? 0xCF : 0x9F);
+    //sendCommand(CONTRAST_COMMAND, (vccState == INTERNAL_VCC) ? 0xCF : 0x9F);
+    sendCommand(CONTRAST_COMMAND, 0xFF);
 
     sendCommand(PRE_CHARGE_PERIOD, (vccState == INTERNAL_VCC) ? 0xF1 : 0x22);
+
+    sendCommand(VCOMDETECT, 0x40);
 
     sendCommand(DISPLAY_ON_ALL_RAM_COMMAND);
     sendCommand(NORMAL_DISPLAY_COMMAND);
@@ -83,8 +87,13 @@ void OledSSD1306::clear() {
     //sendDisplayBuffer();
 }
 
-void OledSSD1306::invert(bool invert) const {
-    sendCommand(invert ? INVERSE_DISPLAY_COMMAND : NORMAL_DISPLAY_COMMAND);
+void OledSSD1306::invert() {
+    sendCommand(!m_inverted ? INVERSE_DISPLAY_COMMAND : NORMAL_DISPLAY_COMMAND);
+    m_inverted = !m_inverted;
+}
+
+void OledSSD1306::fill() {
+    std::fill(begin(m_buff), end(m_buff), 0xFF);
 }
 
 void OledSSD1306::setContrast(uint8_t value) const {
@@ -92,7 +101,7 @@ void OledSSD1306::setContrast(uint8_t value) const {
 }
 
 void OledSSD1306::drawPixel(uint16_t x, uint16_t y, uint16_t color) {
-    if ((x < 0) || (x > DISPLAY_WIDTH) || (y < 0) || (y > DISPLAY_WIDTH)) return;
+    if (x > DISPLAY_WIDTH || y > DISPLAY_WIDTH) return;
 
     /*
      * Calculate the height position and add the x value
@@ -111,46 +120,41 @@ void OledSSD1306::drawPixel(uint16_t x, uint16_t y, uint16_t color) {
         default:
             error("Colors can only be 0 = White, 1 = Black or 2 = Inversed. View header file for macros");
     }
-
     sendDisplayBuffer();
 }
 
-bool OledSSD1306::getPixel(uint16_t x, uint16_t y) const {
-    if ((x < DISPLAY_WIDTH) && (y < DISPLAY_HEIGHT)) {
-        return (m_buff[DISPLAY_WIDTH * (y / 8) + x] & (1 << (y & 7)));
+void OledSSD1306::print(unsigned char c, uint16_t color) {
+    const uint8_t* font = font8x8_basic[(uint8_t) c];
+    for (int i = 0; i < 8; i++) {
+        uint8_t line = (*(const unsigned char *)(&font[(uint8_t) c * 8 + i]));
+        for (int j = 0; j < 8; j++, line >>= 1) {
+            drawPixel(0 + i, 0 + j, color);
+        }
     }
-    return false;
 }
+
 
 void OledSSD1306::sendDisplayBuffer() const {
 
-    cout << "Array content: [ ";
-    for (const auto& element : m_buff) {
-        // Print each element as a two-digit hexadecimal number
-        std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(element) << " ";
-    }
-    std::cout << "]" << std::endl;
+    //cout << "Array content: [ ";
+    //for (const auto& element : m_buff) {
+    //    // Print each element as a two-digit hexadecimal number
+    //    std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(element) << " ";
+    //}
+    //std::cout << "]" << std::endl;
 
     for (const uint8_t pixel : m_buff) {
         sendData(pixel);
     }
-
-
-    // Render each page
-    //char cmd[] = {COMMAND_MODE, charc (PAGE_START_ADDRESS), COMMAND_MODE, HIGHER_COLUMN_COMMAND};
-
-    //for (uint8_t i = 0; i < DISPLAY_HEIGHT / 8; i++) {
-    //    cmd[1] = PAGE_START_ADDRESS + i;
-
-    //    for (int k = 0; k < DISPLAY_WIDTH; k++) {
-    //        buff[k + 1] = m_buff[DISPLAY_WIDTH * i + k];
-    //    }
-
-        //m_i2c->write(SA0, cmd, 4);
-
-        //m_i2c->write(SA0, *buffPtr++, 1);
-    //}
 }
 
-void OledSSD1306::setFont(const uint8_t* font) const {
+void OledSSD1306::setFont(uint8_t* font) {
+    m_font = font;
+}
+
+bool OledSSD1306::getPixel(uint16_t x, uint16_t y) const {
+    if (x < DISPLAY_WIDTH && y < DISPLAY_HEIGHT) {
+        return (m_buff[DISPLAY_WIDTH * (y / 8) + x] & (1 << (y & 7)));
+    }
+    return false;
 }
