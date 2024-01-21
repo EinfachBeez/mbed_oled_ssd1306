@@ -1,25 +1,14 @@
 #include <mbed.h>
 #include "../include/OledSSD1306.h"
 
-#include <iomanip>
 #include <iostream>
 
 OledSSD1306::OledSSD1306(I2C& i2c) : m_i2c(i2c), m_i2cAddress(0x3C) {}
 
 OledSSD1306::OledSSD1306(I2C& i2c, uint8_t i2cSlaveAddress) : m_i2c(i2c), m_i2cAddress(i2cSlaveAddress) {
-    //this->m_thread.start(callback(this, &OledSSD1306::runUpdateThread));
 }
 
-OledSSD1306::~OledSSD1306() {
-    //m_thread.join();
-
-}
-
-void OledSSD1306::runUpdateThread() const{
-    //while (true) {
-    //    sendDisplayBuffer();
-    //}
-}
+OledSSD1306::~OledSSD1306() = default;
 
 void OledSSD1306::start(uint8_t vccState) {
     clear();
@@ -28,12 +17,10 @@ void OledSSD1306::start(uint8_t vccState) {
     sendCommand(DISPLAY_OFF_COMMAND);
     sendCommand(DISPLAY_CLOCK_COMMAND, 0x80);
 
-    //sendCommand(MULTIPLEX_RATIO_COMMAND, 0x3F);
-    sendCommand(MULTIPLEX_RATIO_COMMAND);
-    sendCommand(0x3F); // HEIGHT - 1
+    sendCommand(MULTIPLEX_RATIO_COMMAND, 0x3F); // HEIGHT - 1
 
     sendCommand(DISPLAY_OFFSET_COMMAND, 0x00);
-    sendCommand(DISPLAY_START_LINE_COMMAND | 0x00);
+    sendCommand(DISPLAY_START_LINE_COMMAND);
 
     //sendCommand(DISPLAY_CHARGE_PUMP_COMMAND, 0x14);
     sendCommand(DISPLAY_CHARGE_PUMP_COMMAND);
@@ -51,7 +38,7 @@ void OledSSD1306::start(uint8_t vccState) {
 
     sendCommand(PRE_CHARGE_PERIOD, (vccState == INTERNAL_VCC) ? 0xF1 : 0x22);
 
-    sendCommand(VCOMDETECT, 0x40);
+    sendCommand(V_COM_DETECT, 0x40);
 
     sendCommand(DISPLAY_ON_ALL_RAM_COMMAND);
     sendCommand(NORMAL_DISPLAY_COMMAND);
@@ -84,7 +71,8 @@ void OledSSD1306::clear() {
     // TODO: Scrolling set page Offset 0 & Start line 0
     //fill(begin(m_buff), end(m_buff), 0);
     m_buff.fill(0);
-    //sendDisplayBuffer();
+    sendDisplayBuffer();
+    setCursor(0, 0);
 }
 
 void OledSSD1306::invert() {
@@ -100,7 +88,7 @@ void OledSSD1306::setContrast(uint8_t value) const {
     sendCommand(CONTRAST_COMMAND, value);
 }
 
-void OledSSD1306::drawPixel(uint16_t x, uint16_t y, uint16_t color) {
+void OledSSD1306::drawPixel(uint16_t x, uint16_t y, uint8_t color) {
     if (x > DISPLAY_WIDTH || y > DISPLAY_WIDTH) return;
 
     /*
@@ -123,22 +111,125 @@ void OledSSD1306::drawPixel(uint16_t x, uint16_t y, uint16_t color) {
     sendDisplayBuffer();
 }
 
-void OledSSD1306::print(unsigned char c, uint16_t color) {
-    const uint8_t* font = font8x8_basic[(uint8_t) c];
-    for (int i = 0; i < 8; i++) {
-        uint8_t line = (*(const unsigned char *)(&font[(uint8_t) c * 8 + i]));
-        for (int j = 0; j < 8; j++, line >>= 1) {
-            drawPixel(0 + i, 0 + j, color);
-        }
-    }
-}
+void OledSSD1306::drawString(uint16_t x, uint16_t y, const std::string& text, uint8_t color) {
+    if (x >= DISPLAY_WIDTH || y >= DISPLAY_HEIGHT) return;
+    if (m_font == nullptr) m_font = ArialMT_16; // default font
+    uint8_t textHeight = (*(const unsigned char *)(m_font + 1));
+    uint8_t firstChar = (*(const unsigned char *)(m_font + 2));
+    uint8_t jumpTableSize = (*(const unsigned char *)(m_font + 3)) * 4;
 
+    char* charText = strdup(text.c_str());
+    if (!charText) {
+        error("Can't allocate char array");
+    }
+
+    char* lineSplit = strtok(charText, "\n");
+    while (lineSplit != nullptr) {
+        for (uint16_t i = 0; i < (uint16_t) strlen(lineSplit); ++i) {
+            uint16_t xPos = x + m_cursor.x;
+            uint16_t yPos = y + m_cursor.y;
+            if (xPos > DISPLAY_WIDTH) break;
+
+            uint8_t charCode = lineSplit[i] - firstChar;
+
+            // msb + lsb
+            char charJump[] = {(*(const unsigned char *)(m_font + JUMP_START + charCode * JUMP_BYTES)),
+                               (*(const unsigned char *)(m_font + JUMP_START + charCode * JUMP_BYTES + 1))};
+            if (!(charJump[0] == 255 && charJump[1] == 255)) {
+                // pos of char data
+                uint16_t charPos = JUMP_START + jumpTableSize + ((charJump[0] << 8) + charJump[1]);
+                uint8_t charByteSize = (*(const unsigned char *)(m_font + JUMP_START + charCode * JUMP_BYTES + JUMP_SIZE));
+                uint8_t crrCharWidth = (*(const unsigned char *)(m_font + JUMP_START + charCode * JUMP_BYTES + JUMP_WIDTH));
+
+                uint8_t rasterHeight = 1 + ((textHeight - 1) >> 3);
+
+                int16_t initY   = y;
+                int8_t yOffset = y & 7;
+                int8_t initYOffset = yOffset;
+
+                charByteSize == 0 ? crrCharWidth * (1 + rasterHeight) : charByteSize;
+                for (uint16_t j = 0; j < charByteSize; ++j) {
+                    if (j % rasterHeight == 0) {
+                        y = initY;
+                        yOffset = initYOffset;
+                    }
+
+                    uint8_t crrByte = (*(const unsigned char *)(m_font + charPos + 1));
+
+                    uint16_t xPos = x + (i / rasterHeight);
+                    uint16_t yPos = ((y >> 3) + (i % rasterHeight)) * DISPLAY_WIDTH;
+
+                    uint16_t dataPos = xPos + yPos;
+
+                    if(dataPos >= 0 && dataPos < BUFF_SIZE && xPos >= 0 && xPos < DISPLAY_WIDTH) {
+                        if (yOffset >= 0) {
+                            switch (color) {
+                                case WHITE_COLOR:
+                                    m_buff[dataPos] |= crrByte << yOffset;
+                                    break;
+                                case BLACK_COLOR:
+                                    m_buff[dataPos] &= ~(crrByte << yOffset);
+                                    break;
+                                case INVERSE_COLOR:
+                                    m_buff[dataPos] ^= crrByte << yOffset;
+                                    break;
+                                default:
+                                    error("Colors can only be 0 = White, 1 = Black or 2 = Inversed. View header file for macros");
+                            }
+
+                            if (dataPos < (BUFF_SIZE - DISPLAY_WIDTH)) {
+                                switch (color) {
+                                    case WHITE_COLOR:
+                                        m_buff[dataPos + DISPLAY_WIDTH] |= crrByte >> (8 - yOffset);
+                                        break;
+                                    case BLACK_COLOR:
+                                        m_buff[dataPos + DISPLAY_WIDTH] &= ~(crrByte >> (8 - yOffset));
+                                        break;
+                                    case INVERSE_COLOR:
+                                        m_buff[dataPos + DISPLAY_WIDTH] ^= crrByte >> (8 - yOffset);
+                                        break;
+                                    default:
+                                        error("Colors can only be 0 = White, 1 = Black or 2 = Inversed. View header file for macros");
+                                }
+                            }
+                        } else {
+                            yOffset = -yOffset;
+                            switch (color) {
+                                case WHITE_COLOR:
+                                    m_buff[dataPos] |= crrByte >> yOffset;
+                                    break;
+                                case BLACK_COLOR:
+                                    m_buff[dataPos] &= ~(crrByte >> yOffset);
+                                    break;
+                                case INVERSE_COLOR:
+                                    m_buff[dataPos] ^= crrByte >> yOffset;
+                                    break;
+                                default:
+                                    error("Colors can only be 0 = White, 1 = Black or 2 = Inversed. View header file for macros");
+                            }
+
+                            y -= 8;
+                            yOffset = 8 - yOffset;
+
+                        }
+                        ThisThread::yield();
+                    }
+                }
+                m_cursor.x += crrCharWidth;
+            }
+        }
+
+
+        lineSplit = strtok(nullptr, "\n");
+    }
+    free(charText);
+}
 
 void OledSSD1306::sendDisplayBuffer() const {
 
+    // DEBUG BUFFER
     //cout << "Array content: [ ";
-    //for (const auto& element : m_buff) {
-    //    // Print each element as a two-digit hexadecimal number
+    //for (const auto& element : m_buff) {// Print each element as a two-digit hexadecimal number
     //    std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(element) << " ";
     //}
     //std::cout << "]" << std::endl;
@@ -148,7 +239,7 @@ void OledSSD1306::sendDisplayBuffer() const {
     }
 }
 
-void OledSSD1306::setFont(uint8_t* font) {
+void OledSSD1306::setFont(const uint8_t* font) {
     m_font = font;
 }
 

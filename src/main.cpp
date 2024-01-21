@@ -1,8 +1,6 @@
-#include <iomanip>
 #include <iostream>
 #include <mbed.h>
 #include "OledSSD1306.h"
-#include "fonts/font_8x8.h"
 
 #define OLED_I2C_SDA PB_9
 #define OLED_I2C_SCL PB_8
@@ -21,19 +19,9 @@ void invertDisplay(OledSSD1306 &display, Timer &debouce) {
     debouce.reset();
 }
 
-void printBuffer(array<uint8_t, BUFF_SIZE> &buff) {
-}
-
 int main() {
 
     printf("Running on Mbed OS %d.%d.%d \n", MBED_MAJOR_VERSION, MBED_MINOR_VERSION, MBED_PATCH_VERSION);
-
-    for (int i = 0; i < 8; ++i) {
-        for (int j = 0; j < 8; ++j) {
-            printf("%s", font8x8_basic[i]);
-        }
-    }
-    printf("\n");
 
     I2C i2c(OLED_I2C_SDA, OLED_I2C_SCL);
     OledSSD1306 oled(i2c, SA0);
@@ -57,10 +45,14 @@ int main() {
 
     //oled.drawPixel(15, 15, 1);
     //oled.drawPixel(16, 15, 1);
+    //oled.setFont(font8x8_basic);
+    //oled.print("Test", 1);
+    oled.fill();
+    ThisThread::sleep_for(5s);
+    oled.clear();
 
-    oled.print('A', 1);
+    oled.setFont(ArialMT_16);
+    oled.drawString(0, 0, "Hello world", 1);
 
     oled.sendDisplayBuffer();
-
-
 }

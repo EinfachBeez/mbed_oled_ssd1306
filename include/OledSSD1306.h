@@ -3,7 +3,7 @@
 
 #include <mbed.h>
 
-#include "fonts/font_8x8.h"
+#include "fonts/Fonts.h"
 
 #define charc static_cast<char>
 
@@ -75,7 +75,7 @@
 #define WHITE_COLOR 0x01
 #define INVERSE_COLOR 0x02
 
-#define VCOMDETECT 0xDB
+#define V_COM_DETECT 0xDB
 
 struct Cursor {
     uint8_t x;
@@ -86,17 +86,17 @@ class OledSSD1306 {
 
 private:
     I2C &m_i2c;
-    Thread m_thread;
     std::array<uint8_t, BUFF_SIZE> m_buff{};
 
     uint8_t m_i2cAddress{};
     uint8_t m_vcc{};
 
     bool m_inverted = false;
+    uint8_t m_letterSpacing = 0;
 
     Cursor m_cursor{0, 0};
 
-    uint8_t* m_font = nullptr;
+    const uint8_t* m_font = nullptr;
 
     void sendCommand(uint8_t command) const;
     void sendCommand(uint8_t command1, uint8_t command2) const;
@@ -116,11 +116,13 @@ public:
     void invert();
     void fill();
 
-    void drawPixel(uint16_t x, uint16_t y, uint16_t color);
+    void drawPixel(uint16_t x, uint16_t y, uint8_t color);
+    void drawLine(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1);
+    void drawString(uint16_t x, uint16_t y, const string& text, uint8_t color);
 
     void print(unsigned char text, uint16_t color);
 
-    void setFont(uint8_t* font);
+    void setFont(const uint8_t* font);
 
     void setCursor(uint16_t x, uint16_t y) {
         m_cursor.x = x;
